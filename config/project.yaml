@@ -1,0 +1,26 @@
+project:
+  display_name: "Investment AI"
+  repo_name: "investment-ai-databricks-agent"
+  environment: "dev"
+
+unity_catalog:
+  catalog: "workspace"
+  schemas:
+    research: "investment_ai_research"
+    portfolio: "investment_ai_portfolio"
+    semantics: "investment_ai_semantics"
+    agent: "investment_ai_agent"
+  volumes:
+    research_documents: "research_documents"
+    portfolio_seed: "portfolio_seed"
+    semi_structured: "semi_structured"
+
+ai_search:
+  endpoint_name: "investment-ai-search"
+  index_name: "workspace.investment_ai_research.investment_ai_research_index"
+
+lakebase:
+  project_name: "investment-ai-agent-memory"
+  branch: "production"
+  database: "databricks_postgres"
+  schema: "investment_ai_memory"

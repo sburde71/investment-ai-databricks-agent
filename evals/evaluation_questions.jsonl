@@ -1,0 +1,4 @@
+{"id": "EVAL-001", "question": "Which companies lowered their outlook in Q2 2026, and how much do we own of them across all Investment AI funds?", "expected_companies": ["NovaChip Technologies", "Evergreen Energy Systems"], "expected_total_exposure_usd": 305000000}
+{"id": "EVAL-002", "question": "Did Apex Retail lower full-year guidance? Cite a primary source.", "expected_answer": "No. Apex Retail maintained/reaffirmed its 2026 guidance."}
+{"id": "EVAL-003", "question": "Which company raised guidance and what is Investment AI's exposure?", "expected_company": "Meridian Health Systems", "expected_exposure_usd": 120000000}
+{"id": "EVAL-004", "question": "For NovaChip, distinguish management's stated reason for the guidance cut from external market interpretation.", "expected_behavior": "Management reason: export-license timing, delayed hyperscale qualification, and product mix. External speculation about weakening demand must be labeled as secondary interpretation."}

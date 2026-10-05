@@ -1,0 +1,13 @@
+latency_targets_seconds:
+  portfolio_only: 30
+  research_only: 60
+  cross_domain: 90
+
+required_quality_dimensions:
+  - correctness
+  - business_fact_accuracy
+  - routing_correctness
+  - research_grounding
+  - citation_presence
+  - relevance
+  - policy_compliance

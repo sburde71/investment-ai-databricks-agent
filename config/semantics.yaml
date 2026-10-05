@@ -1,0 +1,17 @@
+business_terms:
+  company_exposure:
+    definition: "Sum of current market value for a company across Investment AI funds."
+  current_position:
+    definition: "The latest available holdings snapshot for a fund and security."
+  lowered_outlook:
+    definition: "An official reduction in management-issued forward guidance, supported by a primary company source."
+  primary_source:
+    definition: "Company-issued earnings report, earnings call transcript, investor update, or regulatory filing."
+
+source_authority:
+  - rank: 1
+    source_type: "primary"
+  - rank: 2
+    source_type: "internal_research"
+  - rank: 3
+    source_type: "external_secondary"
