@@ -1,0 +1,13 @@
+schemas:
+  - investment_ai_research
+  - investment_ai_portfolio
+  - investment_ai_semantics
+  - investment_ai_agent
+
+volumes:
+  - schema: investment_ai_research
+    name: research_documents
+  - schema: investment_ai_portfolio
+    name: portfolio_seed
+  - schema: investment_ai_portfolio
+    name: semi_structured
