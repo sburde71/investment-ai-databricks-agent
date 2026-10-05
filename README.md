@@ -266,14 +266,6 @@ pytest tests/unit
 
 These checks verify the expected repository contract and the synthetic portfolio ground truth.
 
-## Project status
-
-This repository is intentionally a **starter** for the YouTube build.
-
-Notebook `00_environment_check.ipynb` is included. The remaining notebooks and production implementation will be created progressively so the repository reflects the actual development journey shown in the series.
-
----
-
 ### Disclaimer
 
 This project is for educational and technical demonstration purposes only. It does not represent investment advice, financial recommendations, or a real investment-management company.
