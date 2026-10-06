@@ -122,18 +122,18 @@ This lets the repository grow with the project instead of leaving most of the im
 
 The starter repository contains a synthetic investment dataset for five fictional companies:
 
-| Ticker | Company | Q2 2026 guidance outcome |
+| Security ID | Company | Q2 2026 guidance outcome |
 |---|---|---|
-| NOVA | NovaChip Technologies | Lowered |
-| EVRG | Evergreen Energy Systems | Lowered |
-| APXR | Apex Retail Group | Maintained |
-| MDHN | Meridian Health Systems | Raised |
-| VTXI | Vertex Industrial Technologies | Maintained |
+| IA-SYN-01 | Synthetic Compute Company 01 | Lowered |
+| IA-SYN-02 | Synthetic Energy Company 02 | Lowered |
+| IA-SYN-03 | Synthetic Retail Company 03 | Maintained |
+| IA-SYN-04 | Synthetic Health Company 04 | Raised |
+| IA-SYN-05 | Synthetic Industrial Company 05 | Maintained |
 
 The final application should independently discover from the research corpus that:
 
-- NOVA lowered guidance and Investment AI owns **$220M**
-- EVRG lowered guidance and Investment AI owns **$85M**
+- IA-SYN-01 lowered guidance and Investment AI owns **$220M**
+- IA-SYN-02 lowered guidance and Investment AI owns **$85M**
 - Combined affected exposure is **$305M**
 
 The production agents must **not** read `evals/private_ground_truth/`. That folder exists only for evaluation and validation.
@@ -265,6 +265,14 @@ pytest tests/unit
 ```
 
 These checks verify the expected repository contract and the synthetic portfolio ground truth.
+
+## Project status
+
+This repository is intentionally a **starter** for the YouTube build.
+
+Notebook `00_environment_check.ipynb` is included. The remaining notebooks and production implementation will be created progressively so the repository reflects the actual development journey shown in the series.
+
+---
 
 ### Disclaimer
 
