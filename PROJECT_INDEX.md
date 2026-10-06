@@ -1,4 +1,4 @@
-# Investment AI - Video Topic Index
+# Investment AI - Index
 
 1. Project Overview & Target Architecture
 2. Databricks Environment Setup
