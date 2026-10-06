@@ -1,6 +1,6 @@
-ticker,company_name,sector,country
-NOVA,NovaChip Technologies,Semiconductors,United States
-EVRG,Evergreen Energy Systems,Renewable Energy,United States
-APXR,Apex Retail Group,Consumer Retail,United States
-MDHN,Meridian Health Systems,Healthcare Services,United States
-VTXI,Vertex Industrial Technologies,Industrials,United States
+security_id,company_name,sector,country
+IA-SYN-01,Synthetic Compute Company 01,Semiconductors,Synthetic Region A
+IA-SYN-02,Synthetic Energy Company 02,Renewable Energy,Synthetic Region A
+IA-SYN-03,Synthetic Retail Company 03,Consumer Retail,Synthetic Region A
+IA-SYN-04,Synthetic Health Company 04,Healthcare Services,Synthetic Region A
+IA-SYN-05,Synthetic Industrial Company 05,Industrials,Synthetic Region A

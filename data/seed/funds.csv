@@ -1,4 +1,4 @@
 fund_id,fund_name,strategy
-IAGF,Investment AI Growth Fund,Growth Equity
-IACE,Investment AI Core Equity Fund,Core Equity
-IASO,Investment AI Sustainable Opportunities Fund,Sustainable Equity
+IA-FUND-01,Synthetic Growth Fund 01,Growth Equity
+IA-FUND-02,Synthetic Core Equity Fund 02,Core Equity
+IA-FUND-03,Synthetic Sustainable Fund 03,Sustainable Equity
