@@ -1,18 +1,18 @@
 {
   "flagship_question": "Which companies lowered their outlook in Q2 2026, and how much does Investment AI own of them?",
   "lowered_outlook": [
-    "NOVA",
-    "EVRG"
+    "IA-SYN-01",
+    "IA-SYN-02"
   ],
   "company_exposure_usd": {
-    "NOVA": 220000000,
-    "EVRG": 85000000
+    "IA-SYN-01": 220000000,
+    "IA-SYN-02": 85000000
   },
   "combined_exposure_usd": 305000000,
   "combined_shares": 3062500,
   "control_cases": {
-    "APXR": "maintained",
-    "MDHN": "raised",
-    "VTXI": "maintained"
+    "IA-SYN-03": "maintained",
+    "IA-SYN-04": "raised",
+    "IA-SYN-05": "maintained"
   }
 }

@@ -12,12 +12,12 @@ def test_expected_company_exposure():
     exposure = {}
     shares = {}
     for row in rows:
-        ticker = row["ticker"]
-        exposure[ticker] = exposure.get(ticker, 0) + int(row["market_value_usd"])
-        shares[ticker] = shares.get(ticker, 0) + int(row["shares"])
+        security_id = row["security_id"]
+        exposure[security_id] = exposure.get(security_id, 0) + int(row["market_value_usd"])
+        shares[security_id] = shares.get(security_id, 0) + int(row["shares"])
 
-    assert exposure["NOVA"] == 220_000_000
-    assert shares["NOVA"] == 2_000_000
-    assert exposure["EVRG"] == 85_000_000
-    assert shares["EVRG"] == 1_062_500
-    assert exposure["NOVA"] + exposure["EVRG"] == 305_000_000
+    assert exposure["IA-SYN-01"] == 220_000_000
+    assert shares["IA-SYN-01"] == 2_000_000
+    assert exposure["IA-SYN-02"] == 85_000_000
+    assert shares["IA-SYN-02"] == 1_062_500
+    assert exposure["IA-SYN-01"] + exposure["IA-SYN-02"] == 305_000_000

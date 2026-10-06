@@ -2,11 +2,11 @@
 
 This file exists only for evaluation.
 
-- NOVA / NovaChip Technologies: guidance LOWERED; total exposure $220M.
-- EVRG / Evergreen Energy Systems: guidance LOWERED; total exposure $85M.
-- APXR / Apex Retail Group: guidance MAINTAINED; total exposure $140M.
-- MDHN / Meridian Health Systems: guidance RAISED; total exposure $120M.
-- VTXI / Vertex Industrial Technologies: guidance MAINTAINED; total exposure $75M.
+- IA-SYN-01 / Synthetic Compute Company 01: guidance LOWERED; total exposure $220M.
+- IA-SYN-02 / Synthetic Energy Company 02: guidance LOWERED; total exposure $85M.
+- IA-SYN-03 / Synthetic Retail Company 03: guidance MAINTAINED; total exposure $140M.
+- IA-SYN-04 / Synthetic Health Company 04: guidance RAISED; total exposure $120M.
+- IA-SYN-05 / Synthetic Industrial Company 05: guidance MAINTAINED; total exposure $75M.
 
 Primary flagship expected result:
-NovaChip + Evergreen lowered guidance; combined Investment AI exposure = $305M.
+Synthetic Compute Company 01 + Synthetic Energy Company 02 lowered guidance; combined Investment AI exposure = $305M.
