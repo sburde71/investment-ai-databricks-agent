@@ -1,0 +1,17 @@
+schema_version = 1
+
+[agent]
+framework = "langgraph"
+server = "agentbricks"
+deployment_name = "investment-ai"
+
+[tracing]
+experiment_name = "/Shared/agentbricks_traces/investment-ai-vvekft"
+[[tools]]
+id = "check_portfolio_concentration"
+auth = "app"
+source = {kind = "uc_function", function = "investment_ai.agent.check_portfolio_concentration"}
+[[tools]]
+id = "genie_one"
+auth = "user"
+source = {kind = "genie_one"}

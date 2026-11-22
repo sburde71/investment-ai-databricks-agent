@@ -1,0 +1,22 @@
+command:
+  - python
+  - -m
+  - uvicorn
+  - runtime.main:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "8000"
+env:
+- name: MLFLOW_TRACKING_URI
+  value: databricks
+- name: MLFLOW_EXPERIMENT_ID
+  value: '1366481162177538'
+- name: MLFLOW_ENABLE_ASYNC_TRACE_LOGGING
+  value: "false"
+- name: PIP_INDEX_URL
+  value: https://pypi.org/simple/
+- name: UV_INDEX_URL
+  value: https://pypi.org/simple/
+- name: UV_DEFAULT_INDEX
+  value: https://pypi.org/simple/
