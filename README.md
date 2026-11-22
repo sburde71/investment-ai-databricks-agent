@@ -11,7 +11,7 @@ Databricks has many powerful AI capabilities — AI Search, Genie, Unity Catalog
 
 This project is about **connecting those pieces together** in one realistic end-to-end architecture rather than demonstrating them in isolation.
 
-We will build a production-style **multi-agent investment research application** that can reason across both unstructured research and structured portfolio data.
+The repository implements a production-style **multi-agent investment research application** that can reason across both unstructured research and structured portfolio data.
 
 Our flagship business question is:
 
@@ -85,8 +85,16 @@ investment-ai-databricks-agent/
 │   └── integration/            # Databricks service integration tests
 ├── config/                     # Project, semantic, security and evaluation config
 ├── setup/                      # Workspace bootstrap/resource planning
-├── app/                        # Databricks App integration
-├── deployment/                 # Deployment resources added later in the build
+├── app/                        # Earlier Databricks App integration assets
+├── databricks_app/             # Final deployable Agent Bricks / Databricks App
+│   ├── agent/                  # Final LangGraph orchestration and tools
+│   ├── runtime/                # Agent Bricks runtime and API/UI adapter
+│   ├── ui/                     # Investment AI web interface
+│   ├── agent.toml              # Agent Bricks tool/tracing configuration
+│   ├── app.yaml                # Databricks App runtime configuration
+│   ├── pyproject.toml          # App package and runtime dependencies
+│   └── requirements.txt        # Deployment dependency lock/export
+├── deployment/                 # Deployment resources and packaging assets
 ├── docs/
 │   ├── architecture/           # Architecture diagram and explanation
 │   ├── decisions/              # Architecture Decision Records
@@ -98,9 +106,9 @@ investment-ai-databricks-agent/
 └── README.md
 ```
 
-## How we will build it
+## How the project is organized
 
-The notebooks are our learning and experimentation layer. Once a component becomes stable, its reusable implementation moves into `src/`.
+The notebooks capture the learning and experimentation journey. Stable reusable implementation lives in `src/`, while the final deployable application is packaged under `databricks_app/`.
 
 ```text
 Notebook exploration
@@ -116,11 +124,11 @@ Databricks App
 Deployment + production monitoring
 ```
 
-This lets the repository grow with the project instead of leaving most of the implementation inside notebooks.
+This keeps the complete learning journey in the notebooks while also providing a clean, deployable application layer for the final system.
 
 ## Synthetic dataset
 
-The starter repository contains a synthetic investment dataset for five fictional companies:
+The repository contains a synthetic investment dataset for five fictional companies:
 
 | Security ID | Company | Q2 2026 guidance outcome |
 |---|---|---|
@@ -130,7 +138,7 @@ The starter repository contains a synthetic investment dataset for five fictiona
 | IA-SYN-04 | Synthetic Health Company 04 | Raised |
 | IA-SYN-05 | Synthetic Industrial Company 05 | Maintained |
 
-The final application should independently discover from the research corpus that:
+The application is designed and evaluated to independently discover from the research corpus that:
 
 - IA-SYN-01 lowered guidance and Investment AI owns **$220M**
 - IA-SYN-02 lowered guidance and Investment AI owns **$85M**
@@ -244,7 +252,7 @@ notebooks/00_environment_check.ipynb
 
 That notebook validates the Databricks environment before we create any project resources.
 
-From there, the remaining notebooks will be built one step at a time as the POC progresses.
+From there, continue through the numbered notebooks to follow the complete POC journey from governed data foundations through multi-agent orchestration, evaluation, security, deployment, observability, and human-in-the-loop controls.
 
 ## Important project rules
 
@@ -257,7 +265,7 @@ From there, the remaining notebooks will be built one step at a time as the POC 
 
 ## Validation
 
-The starter repository includes basic validation tests. From a local Python environment:
+The repository includes validation tests. From a local Python environment:
 
 ```bash
 python scripts/validate_repo.py
@@ -265,12 +273,6 @@ pytest tests/unit
 ```
 
 These checks verify the expected repository contract and the synthetic portfolio ground truth.
-
-## Project status
-
-This repository is intentionally a **starter** for the YouTube build.
-
-Notebook `00_environment_check.ipynb` is included. The remaining notebooks and production implementation will be created progressively so the repository reflects the actual development journey shown in the series.
 
 ---
 
