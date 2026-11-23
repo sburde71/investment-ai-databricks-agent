@@ -997,4 +997,1097 @@ function closeToolsPane() {
   elements.capabilitiesBlock.hidden = false;
 }
 
-function renderSessionItems(items) {
+function renderSessionItems(items) {  renderStateItems(elements.sessionItems, items, "No transcript items yet.", (item) => {
+    const data = item?.data || {};
+    return {
+      title: String(data.role || data.type || "item"),
+      content: extractText(data.content ?? data),
+      meta: [item.item_id, item.create_time, data.transport].filter(Boolean).join(" · "),
+    };
+  });
+}
+
+function relativeTime(value) {
+  if (!value) return "";
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return "";
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "Yesterday" : `${days} days ago`;
+}
+
+function renderSessions(items) {
+  state.sessions = items || [];
+  renderSessionList();
+}
+
+function renderSessionList() {
+  elements.sessionList.replaceChildren();
+  if (!state.sessions.length) {
+    stateMessage(elements.sessionList, "No sessions yet.");
+    return;
+  }
+  const query = state.sessionFilter.trim().toLowerCase();
+  const items = state.sessions.filter(
+    (session) =>
+      !query ||
+      String(session.session_id || "").toLowerCase().includes(query) ||
+      String(session.actor_id || "").toLowerCase().includes(query),
+  );
+  if (!items.length) {
+    stateMessage(elements.sessionList, "No sessions match your search.");
+    return;
+  }
+  for (const session of items) {
+    const current = session.session_id === state.sessionId;
+    const canOpen = !current && state.config?.session.managed;
+    const row = document.createElement(canOpen ? "button" : "div");
+    row.className = `session-item${current ? " current" : ""}${canOpen ? " session-open-button" : ""}`;
+    if (canOpen) {
+      row.type = "button";
+      row.disabled = state.busy;
+      row.addEventListener("click", () => openSession(session.session_id));
+    }
+    const top = document.createElement("div");
+    top.className = "session-item-top";
+    const title = document.createElement("span");
+    title.className = "session-item-title";
+    title.textContent = current ? "Current session" : "Session";
+    const time = document.createElement("span");
+    time.className = "session-item-time";
+    time.textContent = current ? "Active" : relativeTime(session.last_activity_time || session.create_time);
+    top.append(title, time);
+    const id = document.createElement("span");
+    id.className = "session-item-id";
+    id.textContent = session.session_id || "unknown";
+    row.append(top, id);
+    elements.sessionList.append(row);
+  }
+}
+
+function renderSessionTranscript(items) {
+  state.draft = null;
+  state.draftText = "";
+  state.lastAssistantText = "";
+  elements.chatLog.replaceChildren(elements.emptyState);
+  elements.emptyState.hidden = false;
+
+  for (const item of items) {
+    const data = item?.data || {};
+    const storedRole = String(data.role || data.type || "").toLowerCase();
+    const content = extractText(data.content ?? data);
+    const reasoning = extractReasoning(data) || extractReasoning(data.content);
+    if (!content && !reasoning) continue;
+    if (storedRole === "human_decision") {
+      appendMessage("system", content, "Human decision");
+      continue;
+    }
+    const role = normalizeRole(data);
+    if (role === "assistant") state.lastAssistantText = content;
+    const message = appendMessage(
+      role,
+      role === "tool" ? toolSummary(data) : content,
+      role === "user" ? "You" : role === "assistant" ? "Agent" : role === "tool" ? "Tool result" : "System",
+    );
+    if (role === "assistant") renderReasoning(message.text, reasoning);
+  }
+}
+
+async function ensureManagedSession() {
+  if (!state.config?.session.managed) return null;
+  const sessionId = ensureSessionId();
+  if (state.managedSessionId === sessionId) return sessionId;
+  stateMessage(elements.sessionItems, "Connecting managed session…", "loading");
+  const response = await fetch(demoUrl("/api/demo/sessions"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...routingHeaders() },
+    body: "{}",
+  });
+  const result = await jsonResponse(response);
+  state.managedSessionId = sessionId;
+  addEvent("session.managed", result);
+  return sessionId;
+}
+
+async function refreshSession({ hydrateChat = false } = {}) {
+  if (!state.config?.session.history) {
+    stateMessage(elements.sessionItems, "Session history is not available.");
+    return;
+  }
+  try {
+    const sessionId = state.config.session.managed ? await ensureManagedSession() : ensureSessionId();
+    const response = await fetch(demoUrl("/api/demo/session/items"), { cache: "no-store", headers: routingHeaders() });
+    const result = await jsonResponse(response);
+    const items = sessionItems(result);
+    renderSessionItems(items);
+    if (hydrateChat) {
+      renderSessionTranscript(items);
+      for (const interrupt of result.interrupts || []) handleInterrupt(interrupt);
+    }
+    addEvent("session.items.list", result);
+  } catch (error) {
+    stateMessage(elements.sessionItems, error instanceof Error ? error.message : String(error), "error");
+    addEvent("session.error", { message: String(error) });
+  }
+}
+
+async function refreshSessions() {
+  stateMessage(elements.sessionList, "Loading sessions…", "loading");
+  try {
+    const response = await fetch(demoUrl("/api/demo/sessions"), { cache: "no-store", headers: routingHeaders() });
+    const result = await jsonResponse(response);
+    renderSessions(sessions(result));
+    addEvent("sessions.list", result);
+  } catch (error) {
+    stateMessage(elements.sessionList, error instanceof Error ? error.message : String(error), "error");
+    addEvent("session.error", { message: String(error) });
+  }
+}
+
+async function refreshSessionView({ hydrateChat = false } = {}) {
+  await refreshSession({ hydrateChat });
+  await refreshSessions();
+}
+
+async function invokeSync(payload) {
+  const response = await fetch("/api/invocations", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: invocationHeaders(),
+    body: JSON.stringify(invocationPayload(payload)),
+  });
+  const result = await jsonResponse(response);
+  const output = agentResult(result);
+  addEvent("response", result);
+  handleOutput(output.output);
+  return output;
+}
+
+function parseSseFrame(frame) {
+  const data = frame
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data || data === "[DONE]") return null;
+  return JSON.parse(data);
+}
+
+async function invokeStreaming(payload) {
+  const invocation = invocationPayload(payload, { stream: true });
+  const response = await fetch("/api/invocations", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: invocationHeaders(),
+    body: JSON.stringify(invocation),
+  });
+  if (!response.ok || !response.body) await jsonResponse(response);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let terminal = null;
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() || "";
+    for (const frame of frames) {
+      const event = parseSseFrame(frame);
+      if (["run.failed", "run.completed"].includes(event?.type)) terminal = event;
+      if (event) handleEvent(event);
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) {
+    const event = parseSseFrame(buffer);
+    if (["run.failed", "run.completed"].includes(event?.type)) terminal = event;
+    if (event) handleEvent(event);
+  }
+  if (terminal?.type === "run.failed") {
+    const message = errorMessage(terminal.error);
+    throw new Error(message ? `Agent invocation failed: ${message}` : `Agent invocation ${invocation.id} failed. Check server logs for details.`);
+  }
+  if (terminal?.type !== "run.completed") {
+    throw new Error(`Stream disconnected before invocation ${invocation.id} completed. Check its status before retrying.`);
+  }
+  finishDraft();
+  return { status: state.pendingInterrupt ? "interrupted" : "completed" };
+}
+
+async function pollBackground(invocationId) {
+  let delay = 850;
+  while (true) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const response = await fetch(`/api/invocations/${encodeURIComponent(invocationId)}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: routingHeaders(),
+    });
+    if (response.status === 404) {
+      throw new Error(`Background invocation ${invocationId} is no longer available. Check server logs and tool side effects before retrying.`);
+    }
+    const result = await jsonResponse(response);
+    addEvent("background.poll", result);
+    if (result.status === "completed") {
+      const output = agentResult(result);
+      handleOutput(output.output);
+      return output;
+    }
+    if (result.status === "failed") throw new Error(`Background invocation ${invocationId} failed. ${errorMessage(result.error) || "Check server logs for details."}`);
+    setStatus(`Background · ${result.status}`, "busy");
+    // Reduce polling load for long runs without imposing an execution deadline.
+    delay = Math.min(delay * 1.5, 5000);
+  }
+}
+
+async function invokeBackground(payload) {
+  const response = await fetch("/api/invocations", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: invocationHeaders(),
+    body: JSON.stringify(invocationPayload(payload, { background: true })),
+  });
+  const started = await jsonResponse(response);
+  addEvent("background.started", started);
+  setStatus(`Background · ${started.id}`, "busy");
+  return pollBackground(started.id);
+}
+
+async function dispatch(payload, mode = state.mode) {
+  state.lastAssistantText = "";
+  state.pendingInterrupt = null;
+  elements.approvalPanel.hidden = true;
+  if (mode === "streaming") return invokeStreaming(payload);
+  if (mode === "background") return invokeBackground(payload);
+  return invokeSync(payload);
+}
+
+async function sendText(text, mode = state.mode) {
+  const content = text.trim();
+  if (!content || state.busy) return "";
+  appendMessage("user", content, "You");
+  setBusy(true, mode === "background" ? "Starting background run" : mode === "streaming" ? "Streaming" : "Running");
+  try {
+    await dispatch({ messages: [{ role: "user", content }] }, mode);
+    await refreshSessionView();
+    return state.lastAssistantText;
+  } catch (error) {
+    finishDraft();
+    appendError(error);
+    throw error;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function resume(decision) {
+  if (state.busy) return;
+  if (!state.pendingInterrupt && !state.config?.session.durable) {
+    appendError(new Error("No paused run is loaded for the current routing session."));
+    return;
+  }
+  const payload =
+    decision === "approve"
+      ? { resume: { decisions: [{ type: "approve" }] } }
+      : { resume: { decisions: [{ type: "reject", message: "Rejected from the Agent Bricks demo UI." }] } };
+  appendMessage("system", decision === "approve" ? "Approved pending tool call." : "Rejected pending tool call.", "Human decision");
+  setBusy(true, "Resuming");
+  try {
+    await dispatch(payload, "streaming");
+    await refreshSessionView();
+  } catch (error) {
+    appendError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function clearChat({ recordEvent = true } = {}) {
+  state.pendingInterrupt = null;
+  state.draft = null;
+  state.draftText = "";
+  state.lastAssistantText = "";
+  elements.approvalPanel.hidden = true;
+  elements.chatLog.replaceChildren(elements.emptyState);
+  elements.emptyState.hidden = false;
+  elements.promptInput.focus();
+  if (recordEvent) addEvent("chat.cleared", { session_id: state.sessionId });
+}
+
+function resetSessionState() {
+  clearChat({ recordEvent: false });
+  stateMessage(elements.sessionList, "Loading sessions…", "loading");
+  stateMessage(elements.sessionItems, "Loading transcript…", "loading");
+}
+
+async function createNewSession() {
+  if (state.busy) return;
+  setBusy(true, "Creating session");
+  try {
+    const previousSessionId = ensureSessionId();
+    setSessionId(newSessionId());
+    resetSessionState();
+    addEvent("session.new", { session_id: state.sessionId, previous_session_id: previousSessionId });
+    if (state.config?.session.managed) await ensureManagedSession();
+    await refreshSessionView({ hydrateChat: true });
+  } catch (error) {
+    appendError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function openSession(sessionId) {
+  if (state.busy || !sessionId || sessionId === state.sessionId) return;
+  setBusy(true, "Opening session");
+  try {
+    const response = await fetch(demoUrl(`/api/demo/sessions/${encodeURIComponent(sessionId)}/open`), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: routingHeaders(),
+    });
+    const result = await jsonResponse(response);
+    setSessionId(sessionId);
+    resetSessionState();
+    addEvent("session.open", result);
+    await refreshSessionView({ hydrateChat: true });
+  } catch (error) {
+    appendError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderModels(models) {
+  const available = models?.available?.length ? models.available : [models?.default].filter(Boolean);
+  state.model = available.includes(state.model) ? state.model : models?.default || available[0] || "";
+  elements.modelSelect.replaceChildren();
+  for (const name of available) {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name === models?.default ? `${name} (project default)` : name;
+    option.selected = name === state.model;
+    elements.modelSelect.append(option);
+  }
+  // A single choice is informational, not a decision to make.
+  elements.modelSelect.disabled = state.busy || available.length <= 1;
+  sizeModelSelect();
+}
+
+// Native selects size to their widest option, which leaves a gap between a short
+// selected name and the chevron. Size the control to the selected option instead.
+function sizeModelSelect() {
+  const select = elements.modelSelect;
+  const option = select.selectedOptions && select.selectedOptions[0];
+  if (!option) return;
+  const probe = document.createElement("span");
+  const style = getComputedStyle(select);
+  probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre;";
+  probe.style.fontFamily = style.fontFamily;
+  probe.style.fontSize = style.fontSize;
+  probe.style.fontWeight = style.fontWeight;
+  probe.style.letterSpacing = style.letterSpacing;
+  probe.textContent = option.textContent;
+  document.body.append(probe);
+  const width = probe.getBoundingClientRect().width;
+  probe.remove();
+  // selected text + left padding (8) + room for the chevron (~26)
+  select.style.width = `${Math.ceil(width) + 34}px`;
+}
+
+async function loadModels() {
+  const response = await fetch(demoUrl("/api/demo/models"), { cache: "no-store" });
+  renderModels(await jsonResponse(response));
+}
+
+async function loadConfig() {
+  try {
+    const response = await fetch(demoUrl("/api/ui/config"), { cache: "no-store" });
+    const config = await jsonResponse(response);
+    state.config = config;
+    state.instanceId = config.instance_id;
+    renderModels(config.models);
+    void loadModels().catch((error) => addEvent("models.error", { message: String(error) }));
+    setViewer(config.viewer);
+    elements.sessionMode.textContent = config.session.mode;
+    elements.memoryMode.textContent = config.memory.enabled ? `Managed · actor ${config.memory.actor}` : "Not connected";
+    setCapability(
+      elements.sessionStatus,
+      config.session.managed ? true : config.session.history ? "degraded" : false,
+      config.session.managed
+        ? `Connected to Session Store "${config.session.store}" for actor ${config.session.actor}. State is durable and shareable.`
+        : "Session state is kept in process and resets when the app restarts.",
+      config.session.managed ? null : "agentbricks sessions bind <store-name>",
+    );
+    setCapability(
+      elements.memoryStatus,
+      config.memory.enabled,
+      config.memory.enabled
+        ? `Connected to ${config.memory.store} for actor ${config.memory.actor}.`
+        : "No long-term memory is connected.",
+      config.memory.enabled ? null : "agentbricks memory bind <store-name>",
+    );
+    elements.tracingMode.textContent = config.tracing?.enabled ? "Connected" : "Not configured";
+    setCapability(
+      elements.tracingStatus,
+      config.tracing?.enabled ? true : "degraded",
+      config.tracing?.enabled
+        ? "Every run is traced to an MLflow experiment."
+        : "Tracing is off. Set an MLflow destination and experiment to record traces.",
+      config.tracing?.enabled ? null : "agentbricks tracing bind --experiment-name <path>",
+      config.tracing?.enabled && config.tracing?.url
+        ? { href: config.tracing.url, label: "View traces in MLflow" }
+        : null,
+    );
+    elements.newSession.disabled = state.busy;
+    elements.refreshSession.disabled = state.busy || !config.session.history;
+    elements.resumeSession.disabled = state.busy || !config.session.durable;
+    elements.rejectSession.disabled = state.busy || !config.session.durable;
+    elements.sessionStoreLabel.textContent = config.session.managed
+      ? `${config.session.store} · actor ${config.session.actor} · the browser session ID keys transcript and checkpoint state.`
+      : config.session.history
+        ? "Messages load from the in-process LangGraph checkpoint for the current browser session."
+        : "Session history is unavailable.";
+    addEvent("runtime.config", config);
+    void refreshSessionView({ hydrateChat: true });
+    // The memory pane loads lazily when opened; refresh it if it is already open.
+    if (!elements.memoryPane.hidden) void loadMemory();
+    // Tools re-read agent.toml on every fetch, so refreshing picks up `agentbricks tools add/remove`.
+    void loadTools();
+    return config;
+  } catch (error) {
+    throw error;
+  }
+}
+elements.composer.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = elements.promptInput.value;
+  if (!text.trim()) return;
+  elements.promptInput.value = "";
+  elements.promptInput.style.height = "auto";
+  updateSendState();
+  try {
+    await sendText(text);
+  } catch {
+    elements.promptInput.value = text;
+    updateSendState();
+  }
+});
+
+elements.promptInput.addEventListener("input", () => {
+  elements.promptInput.style.height = "auto";
+  elements.promptInput.style.height = `${Math.min(elements.promptInput.scrollHeight, 180)}px`;
+  updateSendState();
+});
+
+elements.promptInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    elements.composer.requestSubmit();
+  }
+});
+
+// At most one mode tip shows: the option last hovered or focused.
+const modeOptions = [...document.querySelectorAll(".mode-option")];
+const touchOnly = window.matchMedia("(hover: none)");
+
+function showModeTip(option) {
+  modeOptions.forEach((item) => item.classList.toggle("tip-visible", item === option));
+}
+
+modeOptions.forEach((option) => {
+  const button = option.querySelector(".mode-button");
+  button.addEventListener("click", () => {
+    state.mode = button.dataset.mode;
+    document.querySelectorAll(".mode-button").forEach((item) => item.classList.toggle("active", item === button));
+  });
+  // Touch fires pointerenter and pointerleave around every tap, so touch relies on focus.
+  option.addEventListener("pointerenter", (event) => {
+    if (event.pointerType !== "touch") showModeTip(option);
+  });
+  option.addEventListener("pointerleave", (event) => {
+    if (event.pointerType !== "touch" && option.classList.contains("tip-visible")) showModeTip(null);
+  });
+  button.addEventListener("focus", () => {
+    if (button.matches(":focus-visible") || touchOnly.matches) showModeTip(option);
+  });
+  button.addEventListener("blur", () => {
+    if (option.classList.contains("tip-visible")) showModeTip(null);
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") showModeTip(null);
+});
+
+elements.modelSelect.addEventListener("change", () => {
+  state.model = elements.modelSelect.value;
+  sizeModelSelect();
+  addEvent("model.selected", { model: state.model });
+});
+
+document.querySelectorAll("[data-prompt]").forEach((button) => {
+  button.addEventListener("click", () => {
+    elements.promptInput.value = button.dataset.prompt;
+    elements.promptInput.dispatchEvent(new Event("input"));
+    elements.promptInput.focus();
+  });
+});
+
+elements.copySession.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(ensureSessionId());
+  const label = elements.copySession.querySelector("span");
+  label.textContent = "Copied";
+  setTimeout(() => { label.textContent = "Copy"; }, 1200);
+});
+
+elements.refreshConfig.addEventListener("click", () => loadConfig().catch(appendError));
+elements.newSession.addEventListener("click", createNewSession);
+elements.refreshSession.addEventListener("click", () => refreshSessionView({ hydrateChat: true }));
+elements.clearEvents.addEventListener("click", () => {
+  state.events = [];
+  state.selectedEventId = null;
+  renderEvents();
+});
+
+// Capabilities expand inline on click; Memory and Tools instead open their own panes.
+document.querySelectorAll(".capability").forEach((button) => {
+  button.addEventListener("click", () => {
+    const item = button.closest(".capability-item");
+    if (item?.dataset.capability === "memory") {
+      openMemoryPane();
+      return;
+    }
+    if (item?.dataset.capability === "tools") {
+      openToolsPane();
+      return;
+    }
+    const panel = item?.querySelector(".capability-detail");
+    const expanded = item.classList.toggle("expanded");
+    button.setAttribute("aria-expanded", String(expanded));
+    if (panel) panel.hidden = !expanded;
+  });
+});
+
+// Memory pane controls.
+elements.memoryBack.addEventListener("click", closeMemoryPane);
+elements.memoryRefresh.addEventListener("click", () => loadMemory());
+elements.memoryActor.addEventListener("input", () => {
+  window.clearTimeout(memoryState.searchTimer);
+  memoryState.searchTimer = window.setTimeout(() => void loadMemory(), 300);
+});
+elements.memorySearch.addEventListener("input", () => {
+  memoryState.query = elements.memorySearch.value;
+  window.clearTimeout(memoryState.searchTimer);
+  memoryState.searchTimer = window.setTimeout(() => void loadMemory(), 300);
+});
+
+// Tools pane controls.
+elements.toolsBack.addEventListener("click", closeToolsPane);
+elements.toolsRefresh.addEventListener("click", () => loadTools());
+
+// Memory modal: close on ×, backdrop click, or Escape.
+elements.memoryModalClose.addEventListener("click", closeMemoryModal);
+elements.memoryModal.addEventListener("click", (event) => {
+  if (event.target === elements.memoryModal) closeMemoryModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.memoryModal.hidden) closeMemoryModal();
+});
+
+// Sessions search.
+elements.sessionSearch.addEventListener("input", () => {
+  state.sessionFilter = elements.sessionSearch.value;
+  renderSessionList();
+});
+
+// Events view toggles.
+elements.eventViewLogs.addEventListener("click", () => setEventView("logs"));
+elements.eventViewList.addEventListener("click", () => setEventView("list"));
+
+// Events filter pills (list view only).
+elements.eventFilters.querySelectorAll(".event-filter").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    state.eventFilter = pill.dataset.filter;
+    elements.eventFilters
+      .querySelectorAll(".event-filter")
+      .forEach((item) => item.classList.toggle("active", item === pill));
+    renderEvents();
+  });
+});
+
+// Copy the selected event payload from the list-view detail pane.
+elements.copyEventDetail.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(elements.eventDetailJson.textContent || "");
+  } catch {
+    /* clipboard may be unavailable */
+  }
+});
+
+// Header subtitle: framework · host (host is only known client-side).
+if (elements.brandSub) elements.brandSub.textContent = `${AGENT_FRAMEWORK} · ${window.location.host}`;
+elements.approveAction.addEventListener("click", () => resume("approve"));
+elements.rejectAction.addEventListener("click", () => resume("reject"));
+elements.resumeSession.addEventListener("click", () => resume("approve"));
+elements.rejectSession.addEventListener("click", () => resume("reject"));
+
+loadConfig().catch((error) => {
+  appendError(error);
+  elements.sessionMode.textContent = "Unavailable";
+  elements.memoryMode.textContent = "Unavailable";
+  elements.tracingMode.textContent = "Unavailable";
+  // The Tools row doesn't depend on the runtime config, so load it even when config fails.
+  void loadTools();
+});
+
+/* =========================================================
+   INVESTMENT AI — RESPONSE UI ENHANCEMENTS
+   ========================================================= */
+
+function getInvestmentAgentLabel(text = "") {
+  const value = text.toLowerCase();
+
+  if (
+    value.includes("risk") ||
+    value.includes("exposure") ||
+    value.includes("concentration") ||
+    value.includes("policy") ||
+    value.includes("breach")
+  ) {
+    return {
+      label: "Risk Intelligence",
+      className: "risk-intelligence",
+    };
+  }
+
+  if (
+    value.includes("research") ||
+    value.includes("company") ||
+    value.includes("outlook") ||
+    value.includes("earnings") ||
+    value.includes("catalyst")
+  ) {
+    return {
+      label: "Research Intelligence",
+      className: "research-intelligence",
+    };
+  }
+
+  if (
+    value.includes("portfolio") ||
+    value.includes("holding") ||
+    value.includes("position") ||
+    value.includes("allocation")
+  ) {
+    return {
+      label: "Portfolio Intelligence",
+      className: "portfolio-intelligence",
+    };
+  }
+
+  return {
+    label: "Investment AI",
+    className: "investment-ai",
+  };
+}
+
+
+function decorateInvestmentAIResponses() {
+  const chatLog = document.querySelector("#chat-log");
+
+  if (!chatLog) return;
+
+  const answers = chatLog.querySelectorAll(".message-answer");
+
+  answers.forEach((answer) => {
+    const responseText = answer.textContent || "";
+
+    if (!responseText.trim()) return;
+
+    const agent = getInvestmentAgentLabel(responseText);
+
+    /*
+     * Walk upward from the answer and locate
+     * the assistant message container.
+     */
+    let container = answer.parentElement;
+
+    for (let i = 0; i < 5 && container; i++) {
+      const possibleLabels =
+        container.querySelectorAll("strong, span, div, p");
+
+      let agentLabel = null;
+
+      possibleLabels.forEach((element) => {
+        if (
+          !agentLabel &&
+          element.children.length === 0 &&
+          element.textContent.trim() === "Agent"
+        ) {
+          agentLabel = element;
+        }
+      });
+
+      if (agentLabel) {
+        /*
+         * Change the generic Agent label.
+         */
+        agentLabel.textContent = agent.label;
+
+        container.classList.add(
+          "investment-ai-response",
+          agent.className
+        );
+
+        return;
+      }
+
+      container = container.parentElement;
+    }
+  });
+}
+
+
+/*
+ * Re-run whenever streaming updates the chat.
+ */
+const investmentAIChatLog =
+  document.querySelector("#chat-log");
+
+if (investmentAIChatLog) {
+  const investmentAIObserver =
+    new MutationObserver(() => {
+      decorateInvestmentAIResponses();
+    });
+
+  investmentAIObserver.observe(
+    investmentAIChatLog,
+    {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    }
+  );
+
+  decorateInvestmentAIResponses();
+}
+
+/* =========================================================
+   INVESTMENT AI — MULTI-AGENT ACTIVITY
+   Step 22A
+   ========================================================= */
+
+(() => {
+  const eventLog = document.querySelector("#event-log");
+  const chatLog = document.querySelector("#chat-log");
+  const runStatus = document.querySelector("#run-status");
+
+  if (!eventLog) return;
+
+  /*
+   * Create our Investment AI workflow panel automatically.
+   * Raw Agent Bricks events remain untouched underneath.
+   */
+  let flow = document.querySelector("#investment-agent-flow");
+
+  if (!flow) {
+    flow = document.createElement("div");
+    flow.id = "investment-agent-flow";
+    flow.className = "investment-agent-flow";
+    flow.hidden = true;
+
+    eventLog.parentElement.insertBefore(flow, eventLog);
+  }
+
+  const stages = [
+    {
+      id: "portfolio",
+      label: "Portfolio Intelligence",
+      description: "Analyzing holdings, exposure and portfolio data",
+      icon: "P",
+      keywords: [
+        "genie",
+        "portfolio_metrics",
+        "get_company_exposure",
+        "get_fund_position",
+        "get_combined_company_exposure",
+        "portfolio evidence",
+      ],
+    },
+
+    {
+      id: "research",
+      label: "Research Intelligence",
+      description: "Retrieving governed company research and evidence",
+      icon: "R",
+      keywords: [
+        "search_investment_research",
+        "research evidence",
+        "ai search",
+        "earnings",
+        "research document",
+      ],
+    },
+
+    {
+      id: "risk",
+      label: "Risk Intelligence",
+      description: "Checking concentration, limits and policy",
+      icon: "K",
+      keywords: [
+        "check_portfolio_concentration",
+        "concentration_threshold",
+        "risk_status",
+        "risk / policy",
+        "concentration check",
+      ],
+    },
+  ];
+
+  function getStagePosition(text, stage) {
+    let position = -1;
+
+    stage.keywords.forEach((keyword) => {
+      const current =
+        text.lastIndexOf(keyword.toLowerCase());
+
+      if (current > position) {
+        position = current;
+      }
+    });
+
+    return position;
+  }
+
+  function hasFinalAnswer() {
+    if (!chatLog) return false;
+
+    return [...chatLog.querySelectorAll(".message-answer")]
+      .some((answer) => {
+        return (answer.textContent || "").trim().length > 0;
+      });
+  }
+
+  function isRunReady() {
+    if (!runStatus) return true;
+
+    const value =
+      (runStatus.textContent || "")
+        .trim()
+        .toLowerCase();
+
+    return (
+      value === "ready" ||
+      value === "complete" ||
+      value === "completed"
+    );
+  }
+
+  function renderInvestmentAgentFlow() {
+    const eventText =
+      (eventLog.textContent || "").toLowerCase();
+
+    const detectedStages = stages
+      .map((stage) => ({
+        ...stage,
+        position: getStagePosition(
+          eventText,
+          stage
+        ),
+      }))
+      .filter((stage) => stage.position >= 0);
+
+    /*
+     * Do not show the workflow for normal runtime configuration
+     * events. Show it only after an investment capability is used.
+     */
+    if (!detectedStages.length) {
+      flow.hidden = true;
+      return;
+    }
+
+    flow.hidden = false;
+
+    const ready = isRunReady();
+    const answerComplete = hasFinalAnswer();
+
+    /*
+     * While execution is happening, whichever specialist appeared
+     * most recently in runtime activity is considered active.
+     */
+    let activeStage = null;
+
+    if (!ready) {
+      activeStage = [...detectedStages]
+        .sort((a, b) => b.position - a.position)[0];
+    }
+
+    const stageHtml = stages
+      .map((stage) => {
+        const detected =
+          detectedStages.some(
+            (item) => item.id === stage.id
+          );
+
+        let status = "pending";
+        let statusLabel = "Not required";
+
+        if (detected) {
+          status = "complete";
+          statusLabel = "Completed";
+        }
+
+        if (
+          activeStage &&
+          activeStage.id === stage.id
+        ) {
+          status = "running";
+          statusLabel = "Running";
+        }
+
+        return `
+          <div class="agent-flow-stage ${status}">
+            <div class="agent-flow-node">
+              <span class="agent-flow-icon">
+                ${stage.icon}
+              </span>
+            </div>
+
+            <div class="agent-flow-content">
+              <strong>
+                ${stage.label}
+              </strong>
+
+              <span>
+                ${stage.description}
+              </span>
+            </div>
+
+            <div class="agent-flow-status">
+              ${statusLabel}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    let synthesisStatus = "pending";
+    let synthesisLabel = "Waiting";
+
+    if (detectedStages.length) {
+      synthesisStatus = "running";
+      synthesisLabel = "Synthesizing";
+    }
+
+    if (ready && detectedStages.length) {
+      synthesisStatus = "complete";
+      synthesisLabel = "Completed";
+    }
+
+    flow.innerHTML = `
+      <div class="agent-flow-header">
+        <div>
+          <span class="agent-flow-eyebrow">
+            MULTI-AGENT EXECUTION
+          </span>
+
+          <strong>            Investment Intelligence Workflow
+          </strong>
+        </div>
+
+        <span class="agent-flow-live">
+          Governed
+        </span>
+      </div>
+
+      <div class="agent-flow-stages">
+        ${stageHtml}
+
+        <div class="agent-flow-stage ${synthesisStatus}">
+          <div class="agent-flow-node">
+            <span class="agent-flow-icon">
+              IA
+            </span>
+          </div>
+
+          <div class="agent-flow-content">
+            <strong>
+              Investment Synthesis
+            </strong>
+
+            <span>
+              Combining specialist evidence into the final answer
+            </span>
+          </div>
+
+          <div class="agent-flow-status">
+            ${synthesisLabel}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /*
+   * Watch runtime events.
+   */
+  const eventObserver =
+    new MutationObserver(() => {
+      renderInvestmentAgentFlow();
+    });
+
+  eventObserver.observe(
+    eventLog,
+    {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    }
+  );
+
+  /*
+   * Watch the final answer because synthesis completion
+   * depends on the assistant response appearing.
+   */
+  if (chatLog) {
+    const chatObserver =
+      new MutationObserver(() => {
+        renderInvestmentAgentFlow();
+      });
+
+    chatObserver.observe(
+      chatLog,
+      {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      }
+    );
+  }
+
+  /*
+   * Watch Ready / Running state.
+   */
+  if (runStatus) {
+    const statusObserver =
+      new MutationObserver(() => {
+        renderInvestmentAgentFlow();
+      });
+
+    statusObserver.observe(
+      runStatus,
+      {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      }
+    );
+  }
+
+  renderInvestmentAgentFlow();
+})();
